@@ -33,7 +33,7 @@ M = 12; % Filter order (adjusted to match first code)
 padded_signal = [zeros(M-1, 1); primary]; 
 
 %% LMS Filter
-mu_LMS = 0.06; % Step size for LMS (adjusted from first code)
+mu_LMS = 0.06; % Step size for LMS
 w_LMS = zeros(M, 1); % Initialize filter weights
 output_LMS = zeros(N, 1); % Filter output
 

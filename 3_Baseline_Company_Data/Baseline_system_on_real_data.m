@@ -21,8 +21,7 @@ noise = noise(1:minLength);
 clean = clean(1:minLength);
 
 % Calculate initial SNR for noisy signal
-initial_SNR = 10 * log10(sum(clean.^2) / sum((clean-primary).^2));
-%initial_SNR = snr(clean, primary - clean);
+initial_SNR = 10 * log10(sum(clean.^2) / sum((clean-noise).^2));
 fprintf('Initial SNR (before filtering): %.2f dB\n', initial_SNR);
 
 % Filter Parameters

@@ -18,7 +18,7 @@ noise = noise(1:minLength);
 Y = [primary'; noise'];  % Create a 2-by-n mixture matrix
 Y = bsxfun(@minus, Y, mean(Y, 2));  % Center the data
 
-%% Whiten the data (PowerICA requires whitening)
+%% Whiten the data (PowerICA requires whitening)   (selecting the most adequate for the matrix, would be the idea)
 [E, D] = eig(cov(Y', 1));  % Eigenvalue decomposition of the covariance
 [Ds, ord] = sort(diag(D), 'descend');  % Sort by decreasing eigenvalue
 E = E(:, ord(1:2));  % Take the first 2 eigenvectors (for the 2 sources)

@@ -4,9 +4,9 @@ close all;
 clc;
 
 %% Define the path for the data
-[primary, fs] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\Experiment_Data_vs2\Hospital Ambient Noises\NHS\1\primary.wav");
-[noise, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\Experiment_Data_vs2\Hospital Ambient Noises\NHS\1\secondary.wav");
-[clean, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\Experiment_Data_vs2\Hospital Ambient Noises\NHS\1\ZCH0019.wav");
+[primary, fs] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\primary.wav");   %noise + clean signal
+[noise, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\secondary.wav");
+[clean, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\ZCH0019.wav");
 
 % Find the minimum length
 minLength = min([length(primary), length(noise), length(clean)]);
@@ -61,7 +61,7 @@ SNR_after_phase_correction = 10 * log10(sum(clean.^2) / sum((clean - noise).^2))
 fprintf('SNR after Phase Correction (Fix #3): %.2f dB\n', SNR_after_phase_correction);
 %% LMS Filter
 M = 12; 
-mu_LMS = 0.0006; 
+mu_LMS = 0.1; 
 w_LMS = zeros(M, 1); 
 padded_signal = [zeros(M-1, 1); primary]; 
 output_LMS = zeros(minLength, 1);
@@ -76,7 +76,7 @@ end
 filtered_signal_LMS = primary - output_LMS; 
 
 %% NLMS Filter
-mu_NLMS = 0.0006; 
+mu_NLMS = 1; 
 w_NLMS = zeros(M, 1); 
 output_NLMS = zeros(minLength, 1);
 Eps = 0.0001; 
@@ -92,7 +92,7 @@ end
 filtered_signal_NLMS = primary - output_NLMS; 
 
 %% RLS Filter
-lambda = 0.1; % Forgetting factor  1 - 1 / (0.1 * M) =  0.1666 ; 
+lambda = 1; % Forgetting factor  1 - 1 / (0.1 * M) =  0.1666 ; 
 delta = 0.01; 
 P = 1 / delta * eye(M); 
 w_RLS = zeros(M, 1);

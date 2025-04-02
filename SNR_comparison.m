@@ -2,7 +2,7 @@
 SNR_values = [
     -20.02, 3.25, 129.30, 113.32;   % Baseline on Sinus Wave
     -20.00, 5.82, 101.76, 91.62;    % Synthetic Heartbeat
-    18.22, 18.67, 16.69, 16.67;     % NHS with Hospital Noise
+    -0.27, 18.67, 16.69, 16.67;     % NHS with Hospital Noise
     -17.42, 23.43, 17.32, 17.29     % Your Own Experiment
 ];
 

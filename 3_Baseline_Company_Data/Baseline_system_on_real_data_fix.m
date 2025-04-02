@@ -4,9 +4,9 @@ close all;
 clc;
 
 %% Define the path for the data
-[primary, fs] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\primary.wav");
-[noise, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\secondary.wav");
-[clean, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\ZCH0019.wav");
+[primary, fs] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\Experiment_Data_vs2\Hospital Ambient Noises\NHS\1\primary.wav");
+[noise, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\Experiment_Data_vs2\Hospital Ambient Noises\NHS\1\secondary.wav");
+[clean, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\Experiment_Data_vs2\Hospital Ambient Noises\NHS\1\ZCH0019.wav");
 
 % Find the minimum length
 minLength = min([length(primary), length(noise), length(clean)]);
@@ -18,6 +18,7 @@ clean = clean(1:minLength);
 
 %% Calculate initial SNR for audio files
 initial_SNR = 10 * log10(sum(clean.^2) / sum((clean - noise).^2));
+
 fprintf('Initial SNR (before any processing): %.2f dB\n', initial_SNR);
 
 %% Fix #1: Bandpass Filtering to Remove Distortions
@@ -145,82 +146,20 @@ plot(filtered_signal_RLS);
 title('Filtered Signal (RLS)');
 xlim([0 minLength]);
 
-% %% Spectrogram Comparison (Before and After Fixes)
-% figure;
-% 
-% % Parameters for spectrogram
-% window = hann(256);  
-% overlap = 200;       
-% nfft = 1024;        
-% dBmin = -80; % Threshold to clip lower-intensity noise
-% 
-% % Spectrogram before fixes
-% subplot(3,2,1);
-% [S, F, T] = spectrogram(primary, window, overlap, nfft, fs);
-% S_dB = 20*log10(abs(S));  
-% S_dB(S_dB < dBmin) = dBmin;
-% imagesc(T, F, S_dB);
-% axis xy; xlabel('Time (s)'); ylabel('Frequency (Hz)');
-% title('Primary (Before Fixes)');
-% xlim([0 length(primary)/fs]); ylim([0 2000]);
-% colormap hot; colorbar;
-% 
-% subplot(3,2,2);
-% [S, F, T] = spectrogram(noise, window, overlap, nfft, fs);
-% S_dB = 20*log10(abs(S));  
-% S_dB(S_dB < dBmin) = dBmin;
-% imagesc(T, F, S_dB);
-% axis xy; xlabel('Time (s)'); ylabel('Frequency (Hz)');
-% title('Noise (Before Fixes)');
-% xlim([0 length(noise)/fs]); ylim([0 2000]);
-% colormap hot; colorbar;
-% 
-% % Spectrogram after bandpass filtering
-% subplot(3,2,3);
-% [S, F, T] = spectrogram(filtfilt(b, a, primary), window, overlap, nfft, fs);
-% S_dB = 20*log10(abs(S));  
-% S_dB(S_dB < dBmin) = dBmin;
-% imagesc(T, F, S_dB);
-% axis xy; xlabel('Time (s)'); ylabel('Frequency (Hz)');
-% title('Primary (After Bandpass)');
-% xlim([0 length(primary)/fs]); ylim([0 2000]);
-% colormap hot; colorbar;
-% 
-% subplot(3,2,4);
-% [S, F, T] = spectrogram(filtfilt(b, a, noise), window, overlap, nfft, fs);
-% S_dB = 20*log10(abs(S));  
-% S_dB(S_dB < dBmin) = dBmin;
-% imagesc(T, F, S_dB);
-% axis xy; xlabel('Time (s)'); ylabel('Frequency (Hz)');
-% title('Noise (After Bandpass)');
-% xlim([0 length(noise)/fs]); ylim([0 2000]);
-% colormap hot; colorbar;
-% 
-% % Spectrogram after phase correction
-% subplot(3,2,5);
-% [S, F, T] = spectrogram(noise, window, overlap, nfft, fs);
-% S_dB = 20*log10(abs(S));  
-% S_dB(S_dB < dBmin) = dBmin;
-% imagesc(T, F, S_dB);
-% axis xy; xlabel('Time (s)'); ylabel('Frequency (Hz)');
-% title('Noise (After Phase Correction)');
-% xlim([0 length(noise)/fs]); ylim([0 2000]);
-% colormap hot; colorbar;
-% 
-% subplot(3,2,6);
-% [S, F, T] = spectrogram(primary, window, overlap, nfft, fs);
-% S_dB = 20*log10(abs(S));  
-% S_dB(S_dB < dBmin) = dBmin;
-% imagesc(T, F, S_dB);
-% axis xy; xlabel('Time (s)'); ylabel('Frequency (Hz)');
-% title('Primary (Final)');
-% xlim([0 length(primary)/fs]); ylim([0 1000]);
-% colormap hot; colorbar;
-% 
-% % Save figure
-% tightfig();
-% saveas(gcf, 'Spectrograms_Fixes.pdf');
-% 
+%% Spectrogram
+figure;
+melSpectrogram(primary(1:16000*6),fs, ...
+                   'Window',hann(256,'periodic'), ...
+                   'OverlapLength',200, ...
+                   'FFTLength',1024, ...
+                   'NumBands',64, ...
+                   'FrequencyRange',[62.5,8e3]);
+colormap hot; colorbar;
+
+% Save figure
+tightfig();
+saveas(gcf, 'Spectrogram.pdf');
+
 % %% Cross-Correlation Before and After Noise Alignment
 % figure;
 % subplot(2,1,1);
@@ -238,7 +177,7 @@ xlim([0 minLength]);
 % ylabel('Cross-Correlation');
 % 
 % saveas(gcf, 'Cross_Correlation_Alignment.pdf');
-% 
+
 % %% Phase Difference Before and After Fix #3
 % figure;
 % subplot(2,1,1);
@@ -254,7 +193,6 @@ xlim([0 minLength]);
 % ylabel('Phase (radians)');
 % 
 % saveas(gcf, 'Phase_Correction.pdf');
-
 
 %% Export filtered signals
 filtered_signal_LMS = filtered_signal_LMS / max(abs(filtered_signal_LMS));

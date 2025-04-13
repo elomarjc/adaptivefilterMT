@@ -8,6 +8,15 @@ clc;
 [noise, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\secondary.wav");
 [clean, ~] = audioread("C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Data from AI heathway\Data_ANC\Experiment_Data\Hospital Ambient Noises\NHS\1\ZCH0019.wav");
 
+%% Define start time for trimming (1.5 seconds)
+start_time = 1.7;  % in seconds
+start_sample = round(start_time * fs);  % Convert time to sample index
+
+%% Trim the signals to start from 1.5 seconds
+primary = primary(start_sample:end);
+noise = noise(start_sample:end);
+clean = clean(start_sample:end);
+
 % Find the minimum length
 minLength = min([length(primary), length(noise), length(clean)]);
 
@@ -20,7 +29,6 @@ clean = clean(1:minLength);
 initial_SNR = 10 * log10(sum(clean.^2) / sum((clean - noise).^2));
 
 fprintf('Initial SNR (before any processing): %.2f dB\n', initial_SNR);
-
 %% Fix #1: Bandpass Filtering to Remove Distortions
 lowCutoff = 5; % Low cut frequency in Hz
 highCutoff = 800; % High cut frequency in Hz
@@ -32,33 +40,6 @@ noise = filtfilt(b, a, noise);
 SNR_after_bandpass = 10 * log10(sum(clean.^2) / sum((clean - noise).^2));
 fprintf('SNR after Bandpass Filtering (Fix #1): %.2f dB\n', SNR_after_bandpass);
 
-%% Fix #2: Align Reference Noise Using Cross-Correlation
-[xcorr_vals, lags] = xcorr(primary, noise);
-[~, maxIdx] = max(abs(xcorr_vals));
-delay = lags(maxIdx);
-
-if delay > 0
-    noise = [zeros(delay,1); noise(1:end-delay)];
-elseif delay < 0
-    noise = noise(-delay+1:end);
-    noise = [noise; zeros(-delay,1)];
-end
-
-% SNR after fix #2 (Cross-Correlation Delay Alignment)
-SNR_after_alignment = 10 * log10(sum(clean.^2) / sum((clean - noise).^2));
-fprintf('SNR after Noise Alignment (Fix #2): %.2f dB\n', SNR_after_alignment);
-
-%% Fix #3: Hilbert Transform for Phase Correction
-analytic_primary = hilbert(primary);
-analytic_noise = hilbert(noise);
-phase_diff = angle(analytic_primary ./ analytic_noise); % Compute phase shift per sample
-
-% Apply phase correction to noise
-noise = real(noise .* exp(-1j * phase_diff));
-
-% SNR after fix #3 (Hilbert Transform Phase Correction)
-SNR_after_phase_correction = 10 * log10(sum(clean.^2) / sum((clean - noise).^2));
-fprintf('SNR after Phase Correction (Fix #3): %.2f dB\n', SNR_after_phase_correction);
 %% LMS Filter
 M = 12; 
 mu_LMS = 0.1; 
@@ -132,35 +113,145 @@ title('Noisy Signal');
 xlim([0 minLength]);
 
 subplot(5, 1, 3);
-plot(filtered_signal_LMS);
-title('Filtered Signal (LMS)');
+plot(clean-filtered_signal_LMS);
+title('Error signal (LMS)');
+ylim([-1 1]);
 xlim([0 minLength]);
 
 subplot(5, 1, 4);
-plot(filtered_signal_NLMS);
-title('Filtered Signal (NLMS)');
+plot(clean-filtered_signal_NLMS);
+title('Error signal (NLMS)');
+ylim([-1 1]);
 xlim([0 minLength]);
 
 subplot(5, 1, 5);
-plot(filtered_signal_RLS);
-title('Filtered Signal (RLS)');
+plot(clean-filtered_signal_RLS);
+title('Error signal (RLS)');
+ylim([-1 1]);
 xlim([0 minLength]);
 
+tightfig();
+saveas(gcf, 'Hospital_Ambient_Noises_NHS_1.pdf');
+
 %% Spectrogram
+windowLength = round(0.14*fs);  % 140 ms window length
+hop_size = round(0.02*fs);      % 20 ms hop size
+overlap = windowLength - hop_size; 
+numBands = 128;                 % Number of Mel bands
+hannWin = hann(windowLength, 'periodic'); 
+
+% Compute Mel spectrogram for primary signal
+[s_primary, f, t] = melSpectrogram(primary, fs, ...
+                            "Window", kaiser(windowLength,18), ...
+                            'OverlapLength', overlap, ...
+                            'NumBands', numBands);
+
+s_primary_db = 10 * log10(s_primary + eps);
+
+% Compute Mel spectrogram for noise signal
+[s_noise, ~, ~] = melSpectrogram(noise, fs, ...
+                            "Window", kaiser(windowLength,18), ...
+                            'OverlapLength', overlap, ...
+                            'NumBands', numBands);
+
+t = t - t(1); % Force time axis to start from 0
+
+s_noise_db = 10 * log10(s_noise + eps);
+
+% Plot Mel spectrograms
 figure;
-melSpectrogram(primary(1:16000*6),fs, ...
-                   'Window',hann(256,'periodic'), ...
-                   'OverlapLength',200, ...
-                   'FFTLength',1024, ...
-                   'NumBands',64, ...
-                   'FrequencyRange',[62.5,8e3]);
-colormap hot; colorbar;
+
+% Primary signal
+subplot(2,1,1);
+imagesc(t, f, s_primary_db);
+axis xy;
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+title('Primary Signal');
+colorbar;
+colormap jet;
+set(gcf, 'Units', 'inches', 'Position', [1, 1, numel(primary)/fs, 1]);
+ylim([0 4000]);
+xlim([0 5]);
+
+% Noise signal
+subplot(2,1,2);
+imagesc(t, f, s_noise_db);
+axis xy;
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+title('Noise Signal');
+colorbar;
+colormap jet;
+set(gcf, 'Units', 'inches', 'Position', [1, 1, numel(noise)/fs, 1]);
+ylim([0 4000]);
+xlim([0 5]);
 
 % Save figure
-tightfig();
-saveas(gcf, 'Spectrogram.pdf');
+%tightfig();
+%saveas(gcf, 'Mel_Spectrogram_real_heartbeatpdf');
 
-% %% Cross-Correlation Before and After Noise Alignment
+%% Compare simulation synthethic heartbeat spectrogram with real data spectrogram
+
+f1 = openfig('synthethic_heartbeat_melSpectrogram.fig', 'reuse'); % Load figure
+
+% Get the axes from the loaded figure (this will give you only the axes, ignoring colorbars)
+ax1 = findall(f1, 'Type', 'axes');  
+
+length_of_spec_view = 10;
+
+figure;
+% --- Subplot 1: Synthetic Heartbeat Spectrogram ---
+subplot(2,2,1);  % First subplot in a 2x2 grid
+copyobj(allchild(ax1(2)), gca); 
+title('Primary Signal (Synthetic Heartbeat)');
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+xlim([0 length_of_spec_view]);
+ylim([0 4000]);
+
+% --- Subplot 2: Real Primary Signal Spectrogram ---
+subplot(2,2,2);  % Second subplot in a 2x2 grid
+imagesc(t, f, s_primary_db);   % Plot primary signal spectrogram
+axis xy;
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+title('Primary Signal (Real Heartbeat)');
+xlim([0 length_of_spec_view]);
+ylim([0 4000]);
+
+
+% --- Subplot 3: Real Noise Signal Spectrogram (Copy) ---
+subplot(2,2,3);  % Fourth subplot in a 2x2 grid
+copyobj(allchild(ax1(1)), gca);  % Copy content from the second subplot
+title('Noise Signal (Synthetic Heartbeat)');
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+xlim([0 length_of_spec_view]);
+ylim([0 4000]);
+
+% --- Subplot 4: Real Noise Signal Spectrogram ---
+subplot(2,2,4);  % Third subplot in a 2x2 grid
+imagesc(t, f, s_noise_db);     % Plot noise signal spectrogram
+axis xy;
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+title('Noise Signal (Real Heartbeat)');
+colormap jet;
+xlim([0 length_of_spec_view]);
+ylim([0 4000]);
+
+
+% Set figure size
+set(gcf, 'Units', 'inches', 'Position', [3.416666666666667,4.333333333333333,9.683333333333334,2.45]);
+
+
+% Save the figure as PDF
+tightfig();
+saveas(gcf, 'Comparison_Mel_Spectrogram.pdf');
+
+
+%% Cross-Correlation Before and After Noise Alignment
 % figure;
 % subplot(2,1,1);
 % [xcorr_vals_before, lags_before] = xcorr(primary, noise);
@@ -212,10 +303,7 @@ fprintf('Step size (LMS): %f \n', mu_LMS);
 fprintf('Step size (NLMS): %f \n', mu_NLMS);
 fprintf('Forgetting factor (RLS): %f \n', lambda);
 
-%% Save Figure as PDF
-tightfig();
-saveas(gcf, 'Hospital_Ambient_Noises_NHS_1.pdf');
-
+%% Save Figure trimmed
 function tightfig()
     set(gcf, 'Units', 'Inches');
     pos = get(gcf, 'Position');

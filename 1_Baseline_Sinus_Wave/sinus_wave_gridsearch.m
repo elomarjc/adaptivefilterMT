@@ -1,0 +1,290 @@
+clc;
+clear;
+close all;
+
+%% Simulate Signal and Noise
+fs = 8000; % Sampling frequency
+duration = 15; % seconds
+t = 0:1/fs:duration;
+clean = sin(2 * pi * 10 * t)'; % Clean signal
+noise = 0.5 * randn(size(t))'; % Noise
+primary = clean + noise;       % Observed signal
+
+%% Parameters
+mu_values_LMS = 0.001:0.001:0.09;   % Separate step size range for LMS
+mu_values_NLMS = 0.5:0.1:1.0;    % Separate step size range for NLMS
+filterOrders = 1:20;
+lambda_values = 0.1:0.1:0.9;
+
+totalIterations = length(filterOrders) * (length(mu_values_LMS) + length(mu_values_NLMS)) + ...
+                  length(filterOrders) * length(lambda_values);
+
+results(totalIterations) = struct('type', '', 'M', [], 'param', [], 'snr', -Inf);
+
+parfor_progress(totalIterations); % Progress bar (if installed)
+
+%% Main Loop
+parfor idx = 1:totalIterations
+    local_result = struct('type', '', 'M', [], 'param', [], 'snr', -Inf);
+
+    totalLMS = length(filterOrders) * length(mu_values_LMS);
+    totalNLMS = length(filterOrders) * length(mu_values_NLMS);
+    totalMu = totalLMS + totalNLMS;
+
+    if idx <= totalMu
+        if idx <= totalLMS
+            % LMS
+            M_idx = ceil(idx / length(mu_values_LMS));
+            mu_idx = mod(idx - 1, length(mu_values_LMS)) + 1;
+            M = filterOrders(M_idx);
+            mu = mu_values_LMS(mu_idx);
+            [y, ~] = lms_filter(noise, primary, M, mu);
+            filterName = 'LMS';
+        else
+            % NLMS
+            adjusted_idx = idx - totalLMS;
+            M_idx = ceil(adjusted_idx / length(mu_values_NLMS));
+            mu_idx = mod(adjusted_idx - 1, length(mu_values_NLMS)) + 1;
+            M = filterOrders(M_idx);
+            mu = mu_values_NLMS(mu_idx);
+            [y, ~] = nlms_filter(noise, primary, M, mu);
+            filterName = 'NLMS';
+        end
+
+        if all(isfinite(y))
+            snr_val = snr(clean, clean - (primary - y));
+            local_result = struct('type', filterName, 'M', M, 'param', mu, 'snr', snr_val);
+        end
+    else
+        % RLS
+        idx_RLS = idx - totalMu;
+        M_idx = ceil(idx_RLS / length(lambda_values));
+        lambda_idx = mod(idx_RLS - 1, length(lambda_values)) + 1;
+
+        M = filterOrders(M_idx);
+        lambda_val = lambda_values(lambda_idx);
+
+        [y, ~] = rls_filter(noise, primary, M, lambda_val);
+
+        if all(isfinite(y))
+            snr_val = snr(clean, clean - (primary - y));
+            local_result = struct('type', 'RLS', 'M', M, 'param', lambda_val, 'snr', snr_val);
+        end
+    end
+
+    results(idx) = local_result;
+    parfor_progress;
+end
+
+parfor_progress(0);
+
+%% Find Best Parameters
+bestSNR_LMS = -Inf(1, length(filterOrders));
+bestSNR_NLMS = -Inf(1, length(filterOrders));
+bestSNR_RLS = -Inf(1, length(filterOrders));
+
+optMu_LMS = zeros(1, length(filterOrders));
+optMu_NLMS = zeros(1, length(filterOrders));
+optLambda_RLS = zeros(1, length(filterOrders));
+
+for k = 1:totalIterations
+    res = results(k);
+    M_idx = res.M;
+
+    if strcmp(res.type, 'LMS')
+        if res.snr > bestSNR_LMS(M_idx)
+            bestSNR_LMS(M_idx) = res.snr;
+            optMu_LMS(M_idx) = res.param;
+        end
+    elseif strcmp(res.type, 'NLMS')
+        if res.snr > bestSNR_NLMS(M_idx)
+            bestSNR_NLMS(M_idx) = res.snr;
+            optMu_NLMS(M_idx) = res.param;
+        end
+    elseif strcmp(res.type, 'RLS')
+        if res.snr > bestSNR_RLS(M_idx)
+            bestSNR_RLS(M_idx) = res.snr;
+            optLambda_RLS(M_idx) = res.param;
+        end
+    end
+end
+
+%% Create Matrix for Best Parameters
+% Pre-allocate matrices for best parameters for each algorithm
+bestParamsLMS = zeros(length(filterOrders), 3); % [Filter Order, Best SNR (LMS), Optimal mu (LMS)]
+bestParamsNLMS = zeros(length(filterOrders), 3); % [Filter Order, Best SNR (NLMS), Optimal mu (NLMS)]
+bestParamsRLS = zeros(length(filterOrders), 3); % [Filter Order, Best SNR (RLS), Optimal lambda (RLS)]
+
+% Populate bestParamsLMS matrix
+for M = 1:length(filterOrders)
+    bestParamsLMS(M, :) = [filterOrders(M), bestSNR_LMS(M), optMu_LMS(M)];
+end
+
+% Populate bestParamsNLMS matrix
+for M = 1:length(filterOrders)
+    bestParamsNLMS(M, :) = [filterOrders(M), bestSNR_NLMS(M), optMu_NLMS(M)];
+end
+
+% Populate bestParamsRLS matrix
+for M = 1:length(filterOrders)
+    bestParamsRLS(M, :) = [filterOrders(M), bestSNR_RLS(M), optLambda_RLS(M)];
+end
+
+%% Display Best Parameters with Pretty Formatting
+
+% Define header
+header = 'Filter Order | Best SNR (LMS) | Optimal mu (LMS) | Optimal lambda (RLS)';
+
+% Print the LMS parameters
+fprintf('%-15s%-25s%-25s\n', 'Filter Order', 'Best SNR (LMS)', 'Optimal mu (LMS)');
+for i = 1:length(filterOrders)
+    fprintf('%-15.4f%-25.4f%-25.4f\n', bestParamsLMS(i,1), bestParamsLMS(i,2), bestParamsLMS(i,3));
+end
+
+fprintf('\n'); % Newline for separation
+
+% Print the NLMS parameters
+fprintf('%-15s%-25s%-25s\n', 'Filter Order', 'Best SNR (NLMS)', 'Optimal mu (NLMS)');
+for i = 1:length(filterOrders)
+    fprintf('%-15.4f%-25.4f%-25.4f\n', bestParamsNLMS(i,1), bestParamsNLMS(i,2), bestParamsNLMS(i,3));
+end
+
+fprintf('\n'); % Newline for separation
+
+% Print the RLS parameters
+fprintf('%-15s%-25s%-25s\n', 'Filter Order', 'Best SNR (RLS)', 'Optimal lambda (RLS)');
+for i = 1:length(filterOrders)
+    fprintf('%-15.4f%-25.4f%-25.4f\n', bestParamsRLS(i,1), bestParamsRLS(i,2), bestParamsRLS(i,3));
+end
+
+%% Find Absolute Best Parameters for Each Algorithm
+
+% LMS
+[maxSNR_LMS, idx_LMS] = max(bestSNR_LMS);
+bestFilterOrder_LMS = filterOrders(idx_LMS);
+bestMu_LMS = optMu_LMS(idx_LMS);
+
+% NLMS
+[maxSNR_NLMS, idx_NLMS] = max(bestSNR_NLMS);
+bestFilterOrder_NLMS = filterOrders(idx_NLMS);
+bestMu_NLMS = optMu_NLMS(idx_NLMS);
+
+% RLS
+[maxSNR_RLS, idx_RLS] = max(bestSNR_RLS);
+bestFilterOrder_RLS = filterOrders(idx_RLS);
+bestLambda_RLS = optLambda_RLS(idx_RLS);
+
+%% Display Results
+fprintf('\n--- Absolute Best Parameters ---\n');
+
+fprintf('\nLMS:\n');
+fprintf('Best SNR: %.4f dB\n', maxSNR_LMS);
+fprintf('Filter Order: %d\n', bestFilterOrder_LMS);
+fprintf('Optimal mu: %.4f\n', bestMu_LMS);
+
+fprintf('\nNLMS:\n');
+fprintf('Best SNR: %.4f dB\n', maxSNR_NLMS);
+fprintf('Filter Order: %d\n', bestFilterOrder_NLMS);
+fprintf('Optimal mu: %.4f\n', bestMu_NLMS);
+
+fprintf('\nRLS:\n');
+fprintf('Best SNR: %.4f dB\n', maxSNR_RLS);
+fprintf('Filter Order: %d\n', bestFilterOrder_RLS);
+fprintf('Optimal lambda: %.4f\n', bestLambda_RLS);
+
+%% Plot SNR vs Filter Order
+figure;
+plot(filterOrders, bestSNR_LMS, '-o', 'LineWidth', 1.5, 'DisplayName', 'LMS');
+hold on;
+plot(filterOrders, bestSNR_NLMS, '-s', 'LineWidth', 1.5, 'DisplayName', 'NLMS');
+plot(filterOrders, bestSNR_RLS, '-^', 'LineWidth', 1.5, 'DisplayName', 'RLS');
+grid on;
+xlabel('Filter Order (M)');
+ylabel('Best Output SNR [dB]');
+title('Output SNR as a function of Filter Order');
+legend show;
+
+%% Plot Optimal mu / lambda vs Filter Order
+figure;
+plot(filterOrders, optMu_LMS, '-o', 'LineWidth', 1.5, 'DisplayName', 'Optimal \mu LMS');
+hold on;
+plot(filterOrders, optMu_NLMS, '-s', 'LineWidth', 1.5, 'DisplayName', 'Optimal \mu NLMS');
+plot(filterOrders, optLambda_RLS, '-^', 'LineWidth', 1.5, 'DisplayName', 'Optimal \lambda RLS');
+grid on;
+xlabel('Filter Order (M)');
+ylabel('Optimal Step Size / Forgetting Factor');
+title('Optimal \mu / \lambda vs Filter Order');
+legend show;
+
+%% Maximum SNR Achieved by Each Algorithm
+figure;
+maxSNRs = [max(bestSNR_LMS), max(bestSNR_NLMS), max(bestSNR_RLS)];
+bar(maxSNRs);
+set(gca, 'XTickLabel', {'LMS', 'NLMS', 'RLS'});
+ylabel('Best Output SNR (dB)');
+title('Maximum SNR Achieved by Each Algorithm');
+grid on;
+
+
+
+
+
+
+
+
+
+
+
+
+
+%% LMS Filter Function
+function [y, e] = lms_filter(d, x, M, mu)
+    N = length(x);
+    w = zeros(M,1);
+    y = zeros(N,1);
+    e = zeros(N,1);
+    x_padded = [zeros(M-1, 1); x];
+    for n = 1:N
+        x_vec = x_padded(n:n+M-1);  % Current input vector
+        e = d(n) - w' * x_vec; % Error signal
+        w = w + mu * e * x_vec; % Update weights
+        y(n) = w' * x_vec;  % Filtered output
+    end
+end
+
+%% NLMS Filter Function
+function [y, e] = nlms_filter(d, x, M, mu)
+    N = length(x);
+    w = zeros(M,1);
+    y = zeros(N,1);
+    e = zeros(N,1);
+    eps = 0.0001; % Stability constant 
+    x_padded = [zeros(M-1, 1); x];
+    for n = 1:N
+        x_vec = x_padded(n:n+M-1); % Current input vector
+        mu_adapt = mu / (eps + norm(x_vec)^2); % Adaptive step size
+        e = d(n) - w' * x_vec; % Error signal
+        w = w + mu_adapt * e * x_vec; % Update weights
+        y(n) = w' * x_vec; % Filtered output
+    end
+end
+
+%% RLS Filter Function
+function [y, e] = rls_filter(d, x, M, lambda)
+    N = length(x);
+    w = zeros(M,1); % Initialize filter weights
+    y = zeros(N,1);
+    e = zeros(N,1);
+    delta = 0.01; % Initialization constant
+    P = (1/delta) * eye(M); % Initialize inverse correlation matrix
+    x_padded = [sqrt(delta) * randn(M-1, 1); x]; % Pad noisy signal
+    for n = 1:N
+        x_vec = x_padded(n:n+M-1); % Current input vector
+        PI = P * x_vec; % Intermediate calculation
+        k = PI / (lambda + x_vec' * PI);  % Gain
+        e = d(n) - w' * x_vec; % Error signal
+        w = w + k * e; % Update weights
+        P = P / lambda - k * (x_vec' * P) / lambda; % Update P matrix
+        y(n) = w' * x_vec; % Filtered output
+    end
+end

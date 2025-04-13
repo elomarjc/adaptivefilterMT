@@ -12,12 +12,7 @@ t = 0:1/fs:(length(clean)-1)/fs;
 % Ensure the heartbeat signal matches the length of the time vector
 clean = clean(1:length(t));
 
-% Generate noise at -20 dB SNR
-signal_power = mean(clean.^2);   % Compute signal power
-SNR_dB = -20;                     % Desired SNR in dB
-SNR_linear = 10^(SNR_dB/10);   
-noise_power = signal_power / SNR_linear; % Compute noise power
-noise = sqrt(noise_power) * randn(size(t))'; % Generate Gaussian noise with the computed power
+noise = 0.2 * randn(size(t))'; % Simulated Gaussian noise
 
 primary = clean + noise; % Combine signal and noise
 
@@ -106,32 +101,89 @@ plot(primary);
 title('Noisy Signal');
 xlabel('Sample Number');
 ylabel('Amplitude');
-ylim([-5 5]);
+ylim([-1.1 1.1]);
 xlim([0 length(t)]);
 
 subplot(5, 1, 3);
-plot(filtered_signal_LMS);
-title('Filtered Signal (LMS)');
+plot(clean-filtered_signal_LMS);
+title('Error signal (LMS)');
 xlabel('Sample Number');
 ylabel('Amplitude');
 ylim([-1.1 1.1]);
 xlim([0 length(t)]);
 
 subplot(5, 1, 4);
-plot(filtered_signal_NLMS);
-title('Filtered Signal (NLMS)');
+plot(clean-filtered_signal_NLMS);
+title('Error signal (NLMS)');
 xlabel('Sample Number');
 ylabel('Amplitude');
 ylim([-1.1 1.1]);
 xlim([0 length(t)]);
 
 subplot(5, 1, 5);
-plot(filtered_signal_RLS);
-title('Filtered Signal (RLS)');
+plot(clean-filtered_signal_RLS);
+title('Error signal (RLS)');
 xlabel('Sample Number');
 ylabel('Amplitude');
 ylim([-1.1 1.1]);
 xlim([0 length(t)]);
+
+%% Spectrogram
+windowLength = round(0.14*fs);  % 140 ms window length
+hop_size = round(0.02*fs);      % 20 ms hop size
+overlap = windowLength - hop_size; 
+numBands = 128;                 % Number of Mel bands
+hannWin = hann(windowLength, 'periodic'); 
+
+% Compute Mel spectrogram for primary signal
+[s_primary, f, t] = melSpectrogram(primary, fs, ...
+                            "Window", kaiser(windowLength,18), ...
+                            'OverlapLength', overlap, ...
+                            'NumBands', numBands);
+
+s_primary_db = 10 * log10(s_primary + eps);
+
+% Compute Mel spectrogram for noise signal
+[s_noise, ~, ~] = melSpectrogram(noise, fs, ...
+                            "Window", kaiser(windowLength,18), ...
+                            'OverlapLength', overlap, ...
+                            'NumBands', numBands);
+
+t = t - t(1); % Force time axis to start from 0
+
+s_noise_db = 10 * log10(s_noise + eps);
+
+% Plot Mel spectrograms
+figure;
+
+% Primary signal
+subplot(2,1,1);
+imagesc(t, f, s_primary_db);
+axis xy;
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+title('Primary Signal');
+colorbar;
+colormap jet;
+set(gcf, 'Units', 'inches', 'Position', [1, 1, numel(primary)/fs, 1]);
+ylim([0 4000]);
+
+% Noise signal
+subplot(2,1,2);
+imagesc(t, f, s_noise_db);
+axis xy;
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+title('Noise Signal');
+colorbar;
+colormap jet;
+set(gcf, 'Units', 'inches', 'Position', [1, 1, numel(noise)/fs, 1]);
+ylim([0 4000]);
+
+% Save figure
+tightfig();
+saveas(gcf, 'Mel_Spectrogram.pdf');
+savefig('C:\Users\eloma\Desktop\Universitet\OneDrive - Aalborg Universitet\Universitet\9. Semester - ES9\Long Thesis\Matlab\adaptivefilterMT\3_Baseline_Company_Data\synthethic_heartbeat_melSpectrogram.fig');  % saves in .fig format
 
 %% Export filtered signals
 

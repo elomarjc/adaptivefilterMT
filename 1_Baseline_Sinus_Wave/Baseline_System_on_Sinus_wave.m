@@ -7,14 +7,7 @@ fs = 8000; % Sampling frequency
 duration = 15; % Duration of the signal (in seconds)
 t = 0:1/fs:duration; % Time vector
 clean = sin(2 * pi * 10 * t)'; % Simulated clean signal (10 Hz sine wave)
-
-% Generate noise at -20 dB SNR
-signal_power = mean(clean.^2);
-SNR_dB = -20; % Desired SNR in dB
-SNR_linear = 10^(SNR_dB/10);
-noise_power = signal_power / SNR_linear;
-noise = sqrt(noise_power) * randn(size(t))';
-
+noise = 0.5 * randn(size(t))'; % Simulated Gaussian noise
 primary = clean + noise; % Combine signal and noise
 
 % Calculate initial SNR
@@ -25,7 +18,7 @@ N = length(primary); % Signal length
 M = 12; % Filter taps/order (adjusted to match first code)
 
 %% LMS Filter
-mu_LMS = 0.0006; % Step size for LMS (adjusted from first code) %% 0.0006
+mu_LMS = 0.0840; % Step size for LMS (adjusted from first code) %% 0.0006
 w_LMS = zeros(M, 1); % Initialize filter weights
 padded_signal = [zeros(M-1, 1); primary]; % Pad noisy signal
 output_LMS = zeros(N, 1); % Filter output
@@ -101,28 +94,28 @@ plot(primary);
 title('Noisy Signal');
 xlabel('Sample Number');
 ylabel('Amplitude');
-ylim([-20 20]);
+ylim([-1.1 1.1]);
 xlim([0 15000]);
 
 subplot(5, 1, 3); 
-plot(filtered_signal_LMS);
-title('Filtered Signal (LMS)');
+plot(clean-filtered_signal_LMS);
+title('Error signal (LMS)');
 xlabel('Sample Number');
 ylabel('Amplitude');
 ylim([-1.1 1.1]);
 xlim([0 15000]);
 
 subplot(5, 1, 4);
-plot(filtered_signal_NLMS);
-title('Filtered Signal (NLMS)');
+plot(clean-filtered_signal_NLMS);
+title('Error signal (NLMS)');
 xlabel('Sample Number');
 ylabel('Amplitude');
 ylim([-1.1 1.1]);
 xlim([0 15000]);
 
 subplot(5, 1, 5);
-plot(filtered_signal_RLS);
-title('Filtered Signal (RLS)');
+plot(clean-filtered_signal_RLS);
+title('Error signal (RLS)');
 xlabel('Sample Number');
 ylabel('Amplitude');
 ylim([-1.1 1.1]);

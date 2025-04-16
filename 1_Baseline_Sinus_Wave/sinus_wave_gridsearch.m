@@ -9,12 +9,11 @@ t = 0:1/fs:duration;
 clean = sin(2 * pi * 10 * t)'; % Clean signal
 noise = 0.5 * randn(size(t))'; % Noise
 primary = clean + noise;       % Observed signal
-
 %% Parameters
-mu_values_LMS = 0.001:0.001:0.09;   % Separate step size range for LMS
-mu_values_NLMS = 0.5:0.1:1.0;    % Separate step size range for NLMS
-filterOrders = 1:20;
-lambda_values = 0.1:0.1:0.9;
+mu_values_LMS = 0.001:0.001:1;   % Separate step size range for LMS
+mu_values_NLMS = 0.001:0.001:1;    % Separate step size range for NLMS
+filterOrders = 1:30;
+lambda_values = 0.001:0.001:1;
 
 totalIterations = length(filterOrders) * (length(mu_values_LMS) + length(mu_values_NLMS)) + ...
                   length(filterOrders) * length(lambda_values);
@@ -202,7 +201,7 @@ grid on;
 xlabel('Filter Order (M)');
 ylabel('Best Output SNR [dB]');
 title('Output SNR as a function of Filter Order');
-legend show;
+legend('Location','northwest');
 
 %% Plot Optimal mu / lambda vs Filter Order
 figure;
@@ -214,9 +213,9 @@ grid on;
 xlabel('Filter Order (M)');
 ylabel('Optimal Step Size / Forgetting Factor');
 title('Optimal \mu / \lambda vs Filter Order');
-legend show;
+legend('Location','best');
 
-%% Maximum SNR Achieved by Each Algorithm
+%% Plot Maximum SNR Achieved by Each Algorithm
 figure;
 maxSNRs = [max(bestSNR_LMS), max(bestSNR_NLMS), max(bestSNR_RLS)];
 bar(maxSNRs);
@@ -225,52 +224,278 @@ ylabel('Best Output SNR (dB)');
 title('Maximum SNR Achieved by Each Algorithm');
 grid on;
 
+%% Plot Spectrogram
+% windowLength = round(0.14*fs);  % 140 ms window length
+% hop_size = round(0.02*fs);      % 20 ms hop size
+% overlap = windowLength - hop_size; 
+% numBands = 128;                 % Number of Mel bands
+% hannWin = hann(windowLength, 'periodic'); 
+% 
+% % Compute Mel spectrogram for primary signal
+% [s_primary, f, t] = melSpectrogram(primary, fs, ...
+%                             "Window", kaiser(windowLength,18), ...
+%                             'OverlapLength', overlap, ...
+%                             'NumBands', numBands);
+% 
+% s_primary_db = 10 * log10(s_primary + eps);
+% 
+% % Compute Mel spectrogram for noise signal
+% [s_noise, ~, ~] = melSpectrogram(noise, fs, ...
+%                             "Window", kaiser(windowLength,18), ...
+%                             'OverlapLength', overlap, ...
+%                             'NumBands', numBands);
+% 
+% t = t - t(1); % Force time axis to start from 0
+% 
+% s_noise_db = 10 * log10(s_noise + eps);
+% 
+% % Plot Mel spectrograms
+% figure;
+% 
+% % Primary signal
+% subplot(2,1,1);
+% imagesc(t, f, s_primary_db);
+% axis xy;
+% xlabel('Time (s)');
+% ylabel('Frequency (Hz)');
+% title('Primary Signal');
+% colorbar;
+% colormap jet;
+% set(gcf, 'Units', 'inches', 'Position', [3.416666666666667,4.333333333333333,9.683333333333334,2.4]);
+% ylim([0 1000]);
+% xlim([0 5]);
+% 
+% % Noise signal
+% subplot(2,1,2);
+% imagesc(t, f, s_noise_db);
+% axis xy;
+% xlabel('Time (s)');
+% ylabel('Frequency (Hz)');
+% title('Noise Signal');
+% colorbar;
+% colormap jet;
+% set(gcf, 'Units', 'inches', 'Position', [3.416666666666667,4.333333333333333,9.683333333333334,2.4]);
+% ylim([0 1000]);
+% xlim([0 5]);
+% 
+% % Save figure
+% tightfig();
+% saveas(gcf, 'Mel_Spectrogram_sinus_wave.pdf');
 
+%%  Plot LMS Time evolution of the filter weights for the best SNR configuration
 
+% Apply LMS filter with best parameters (we assume noise, primary, bestFilterOrder_LMS, bestMu_LMS are already defined)
+[y_LMS, ~, w_hist_LMS] = lms_filter(noise, primary, bestFilterOrder_LMS, bestMu_LMS);
 
+% Time steps to plot (choose a subset if needed to prevent clutter)
+num_cycles = size(w_hist_LMS, 2); % Total number of cycles
+subset_cycles = min(num_cycles, 500); % Display up to 500 cycles or adjust as needed
 
+% Define a custom color map with more colors (we can use the 'hsv' colormap)
+colors = hsv(bestFilterOrder_LMS); % 'hsv' generates a larger number of distinct colors
 
+% Plot the evolution of filter weights for each tap
+figure;
+hold on;
+for i = 1:bestFilterOrder_LMS
+    plot(1:subset_cycles, w_hist_LMS(i, 1:subset_cycles), 'LineWidth', 1.5, 'Color', colors(i, :));
+end
+hold off;
 
+grid on;
+title('LMS Filter Weight Evolution (First 500 Cycles)');
+xlabel('Cycle (n)');
+ylabel('Weight Value');
 
+% Generate the legend with distinct labels for each weight
+legend_entries_lms = arrayfun(@(i) sprintf('w_{%d}(n)', i-1), 1:bestFilterOrder_LMS, 'UniformOutput', false);
 
+% Adjust the font size and organize the legend in 3 columns
+legend_handle__lms = legend(legend_entries_lms, 'Location', 'Best', 'FontSize', 8, 'NumColumns', 3);
 
+%% Plot NLMS time evolution of the filter weights for the best SNR configuration
+[y_NLMS, ~, w_hist_NLMS] = nlms_filter(noise, primary, bestFilterOrder_NLMS, bestMu_NLMS);
 
+% Time steps to plot (choose a subset if needed to prevent clutter)
+num_cycles = size(w_hist_NLMS, 2); % Total number of cycles
+subset_cycles = min(num_cycles, 500); % Display up to 500 cycles or adjust as needed
 
+% Define a custom color map with more colors (we can use the 'hsv' colormap)
+colors = hsv(bestFilterOrder_NLMS); % 'hsv' generates a larger number of distinct colors
+
+% Plot the evolution of filter weights for each tap
+figure;
+hold on;
+for i = 1:bestFilterOrder_NLMS
+    plot(1:subset_cycles, w_hist_NLMS(i, 1:subset_cycles), 'LineWidth', 1.5, 'Color', colors(i, :));
+end
+hold off;
+
+grid on;
+title('NLMS Filter Weight Evolution (First 500 Cycles)');
+xlabel('Cycle (n)');
+ylabel('Weight Value');
+
+% Generate the legend with distinct labels for each weight
+legend_entries_nlms = arrayfun(@(i) sprintf('w_{%d}(n)', i-1), 1:bestFilterOrder_NLMS, 'UniformOutput', false);
+
+% Adjust the font size and organize the legend in 3 columns
+legend_handle_nlms = legend(legend_entries_nlms, 'Location', 'Best', 'FontSize', 8, 'NumColumns', 3);
+
+%% Plot RLS time evolution of the filter weights for the best SNR configuration
+[y_RLS, ~, w_hist_RLS] = rls_filter(noise, primary, bestFilterOrder_RLS, bestLambda_RLS);
+
+% Time steps to plot (choose a subset if needed to prevent clutter)
+num_cycles = size(w_hist_RLS, 2); % Total number of cycles
+subset_cycles = min(num_cycles, 500); % Display up to 500 cycles or adjust as needed
+
+% Define a custom color map with more colors (we can use the 'hsv' colormap)
+colors = hsv(bestFilterOrder_RLS); % 'hsv' generates a larger number of distinct colors
+
+% Plot the evolution of filter weights for each tap
+figure;
+hold on;
+for i = 1:bestFilterOrder_RLS
+    plot(1:subset_cycles, w_hist_RLS(i, 1:subset_cycles), 'LineWidth', 1.5, 'Color', colors(i, :));
+end
+hold off;
+
+grid on;
+title('RLS Filter Weight Evolution (First 500 Cycles)');
+xlabel('Cycle (n)');
+ylabel('Weight Value');
+
+% Generate the legend with distinct labels for each weight
+legend_entries_rls = arrayfun(@(i) sprintf('w_{%d}(n)', i-1), 1:bestFilterOrder_RLS, 'UniformOutput', false);
+
+% Adjust the font size and organize the legend in 3 columns
+legend_handle_rls = legend(legend_entries_rls, 'Location', 'Best', 'FontSize', 8, 'NumColumns', 3);
+
+%% Plot Error signals
+figure;
+subplot(5, 1, 1);
+plot(clean);
+title('Clean Signal');
+xlabel('Sample Number');
+ylabel('Amplitude');
+ylim([-1.1 1.1]);
+xlim([0 15000]);
+
+subplot(5, 1, 2);
+plot(primary);
+title('Noisy Signal');
+xlabel('Sample Number');
+ylabel('Amplitude');
+ylim([-1.1 1.1]);
+xlim([0 15000]);
+
+subplot(5, 1, 3); 
+plot(clean-(primary-y_LMS));
+title('Error signal (LMS)');
+xlabel('Sample Number');
+ylabel('Amplitude');
+ylim([-1.1 1.1]);
+xlim([0 15000]);
+
+subplot(5, 1, 4);
+plot(clean-(primary-y_NLMS));
+title('Error signal (NLMS)');
+xlabel('Sample Number');
+ylabel('Amplitude');
+ylim([-1.1 1.1]);
+xlim([0 15000]);
+
+subplot(5, 1, 5);
+plot(clean-(primary-y_RLS));
+title('Error signal (RLS)');
+xlabel('Sample Number');
+ylabel('Amplitude');
+ylim([-1.1 1.1]);
+xlim([0 15000]);
+
+% Save figure
+tightfig();
+saveas(gcf, 'sinus_wave_error_signals.pdf');
+
+%% Frequency Response of Final Weights
+n_fft = 257;  % Number of FFT points
+x_range = linspace(0, fs/2, n_fft);  % Frequency axis from 0 to fs/2
+
+figure;
+
+% LMS
+subplot(3, 1, 1);
+w_LMS_final = w_hist_LMS(:, end);
+fr_LMS = 20 * log10(abs(freqz(w_LMS_final, 1, n_fft)));
+plot(x_range, fr_LMS);
+xlabel('Frequency (Hz)');
+ylabel('Magnitude (dB)');
+title('Frequency Response of LMS Filter');
+grid on;
+
+% NLMS
+subplot(3, 1, 2);
+w_NLMS_final = w_hist_NLMS(:, end);
+fr_NLMS = 20 * log10(abs(freqz(w_NLMS_final, 1, n_fft)));
+plot(x_range, fr_NLMS);
+xlabel('Frequency (Hz)');
+ylabel('Magnitude (dB)');
+title('Frequency Response of NLMS Filter');
+grid on;
+
+% RLS
+subplot(3, 1, 3);
+w_RLS_final = w_hist_RLS(:, end);
+fr_RLS = 20 * log10(abs(freqz(w_RLS_final, 1, n_fft)));
+plot(x_range, fr_RLS);
+xlabel('Frequency (Hz)');
+ylabel('Magnitude (dB)');
+title('Frequency Response of RLS Filter');
+grid on;
+
+set(gcf, 'Units', 'inches', 'Position', [9.433333333333334,2.383333333333333,5.033333333333333,8.358333333333333]);
 
 %% LMS Filter Function
-function [y, e] = lms_filter(d, x, M, mu)
+function [y, e, w_hist] = lms_filter(d, x, M, mu)
     N = length(x);
     w = zeros(M,1);
     y = zeros(N,1);
     e = zeros(N,1);
     x_padded = [zeros(M-1, 1); x];
+    w_hist = zeros(M, N); % Store filter weights
+
     for n = 1:N
         x_vec = x_padded(n:n+M-1);  % Current input vector
         e = d(n) - w' * x_vec; % Error signal
         w = w + mu * e * x_vec; % Update weights
         y(n) = w' * x_vec;  % Filtered output
+        
+        w_hist(:, n) = w;
     end
 end
 
 %% NLMS Filter Function
-function [y, e] = nlms_filter(d, x, M, mu)
+function [y, e, w_hist] = nlms_filter(d, x, M, mu)
     N = length(x);
     w = zeros(M,1);
     y = zeros(N,1);
     e = zeros(N,1);
     eps = 0.0001; % Stability constant 
     x_padded = [zeros(M-1, 1); x];
+    w_hist = zeros(M, N); % Store filter weights
     for n = 1:N
         x_vec = x_padded(n:n+M-1); % Current input vector
-        mu_adapt = mu / (eps + norm(x_vec)^2); % Adaptive step size
+        mu1 = mu / (eps + norm(x_vec)^2); % Normalized step size
         e = d(n) - w' * x_vec; % Error signal
-        w = w + mu_adapt * e * x_vec; % Update weights
+        w = w + mu1 * e * x_vec; % Update weights
         y(n) = w' * x_vec; % Filtered output
+        
+        w_hist(:, n) = w;
     end
 end
 
 %% RLS Filter Function
-function [y, e] = rls_filter(d, x, M, lambda)
+function [y, e, w_hist] = rls_filter(d, x, M, lambda)
     N = length(x);
     w = zeros(M,1); % Initialize filter weights
     y = zeros(N,1);
@@ -278,13 +503,156 @@ function [y, e] = rls_filter(d, x, M, lambda)
     delta = 0.01; % Initialization constant
     P = (1/delta) * eye(M); % Initialize inverse correlation matrix
     x_padded = [sqrt(delta) * randn(M-1, 1); x]; % Pad noisy signal
+    w_hist = zeros(M, N); % Store filter weights
     for n = 1:N
         x_vec = x_padded(n:n+M-1); % Current input vector
         PI = P * x_vec; % Intermediate calculation
         k = PI / (lambda + x_vec' * PI);  % Gain
         e = d(n) - w' * x_vec; % Error signal
-        w = w + k * e; % Update weights
-        P = P / lambda - k * (x_vec' * P) / lambda; % Update P matrix
+        w = w + e * k; % Update weights
+        P = P / lambda - k * (x_vec' * P) / lambda; % Update inverse correlation matrix
         y(n) = w' * x_vec; % Filtered output
+        
+        w_hist(:, n) = w;
     end
+
 end
+
+%% Save simulation workspace
+
+mu_values = mu_values_LMS;
+
+% Extract step size info
+mu_min  = min(mu_values);
+mu_max  = max(mu_values);
+mu_step = mu_values(2) - mu_values(1);
+
+% Function to convert to string and remove trailing zeros
+mu_to_str = @(x) regexprep(num2str(x, '%.10g'), '\.?0+$', '');
+
+% Convert values to strings
+mu_min_str  = strrep(mu_to_str(mu_min), '.', '');
+mu_step_str = strrep(mu_to_str(mu_step), '.', '');
+mu_max_str  = strrep(mu_to_str(mu_max), '.', '');
+
+% Filter order bounds
+order_min = min(filterOrders);
+order_max = max(filterOrders);
+
+% Final filename and folder name
+filename_base = sprintf('FilterOrder_%d-%d_StepSizeRange_%s-%s-%s', ...
+    order_min, order_max, mu_step_str, mu_min_str, mu_max_str);
+
+foldername = filename_base;
+filename = fullfile(foldername, [filename_base '.mat']);
+
+% Create folder if it doesn't exist
+if ~exist(foldername, 'dir')
+    mkdir(foldername);
+end
+
+% Save workspace inside that folder
+save(filename);
+
+%% Save parameters
+
+% Define result text file path (same folder as saved .mat)
+results_txt_path = fullfile(foldername, 'best_parameters_summary.txt');
+
+% Open file for writing (overwrite mode)
+fid = fopen(results_txt_path, 'w');
+
+% Check if file opened successfully
+if fid == -1
+    error('Failed to create result text file.');
+end
+
+% Summary Section
+fprintf(fid, '--- Absolute Best Parameters ---\n');
+
+fprintf(fid, '\nLMS:\n');
+fprintf(fid, 'Best SNR: %.4f dB\n', maxSNR_LMS);
+fprintf(fid, 'Filter Order: %d\n', bestFilterOrder_LMS);
+fprintf(fid, 'Optimal mu: %.4f\n', bestMu_LMS);
+
+fprintf(fid, '\nNLMS:\n');
+fprintf(fid, 'Best SNR: %.4f dB\n', maxSNR_NLMS);
+fprintf(fid, 'Filter Order: %d\n', bestFilterOrder_NLMS);
+fprintf(fid, 'Optimal mu: %.4f\n', bestMu_NLMS);
+
+fprintf(fid, '\nRLS:\n');
+fprintf(fid, 'Best SNR: %.4f dB\n', maxSNR_RLS);
+fprintf(fid, 'Filter Order: %d\n', bestFilterOrder_RLS);
+fprintf(fid, 'Optimal lambda: %.4f\n', bestLambda_RLS);
+
+fprintf(fid, '\n');
+
+fprintf(fid, '---------------------------------\n');
+
+% LMS Table
+fprintf(fid, '%-15s%-25s%-25s\n', 'Filter Order', 'Best SNR (LMS)', 'Optimal mu (LMS)');
+for i = 1:length(filterOrders)
+    fprintf(fid, '%-15.0f%-25.4f%-25.4f\n', bestParamsLMS(i,1), bestParamsLMS(i,2), bestParamsLMS(i,3));
+end
+fprintf(fid, '\n');
+
+% NLMS Table
+fprintf(fid, '%-15s%-25s%-25s\n', 'Filter Order', 'Best SNR (NLMS)', 'Optimal mu (NLMS)');
+for i = 1:length(filterOrders)
+    fprintf(fid, '%-15.0f%-25.4f%-25.4f\n', bestParamsNLMS(i,1), bestParamsNLMS(i,2), bestParamsNLMS(i,3));
+end
+fprintf(fid, '\n');
+
+% RLS Table
+fprintf(fid, '%-15s%-25s%-25s\n', 'Filter Order', 'Best SNR (RLS)', 'Optimal lambda (RLS)');
+for i = 1:length(filterOrders)
+    fprintf(fid, '%-15.0f%-25.4f%-25.4f\n', bestParamsRLS(i,1), bestParamsRLS(i,2), bestParamsRLS(i,3));
+end
+
+% Close file
+fclose(fid);
+
+%% Save Figure trimmed
+function tightfig()
+    set(gcf, 'Units', 'Inches');
+    pos = get(gcf, 'Position');
+    set(gcf, 'PaperUnits', 'Inches');
+    set(gcf, 'PaperSize', [pos(3) pos(4)]);
+    set(gcf, 'PaperPosition', [0 0 pos(3) pos(4)]);
+end
+
+%% LMS: Plot time evolution of the filter weights for the best SNR configuration
+[y_LMS, ~, w_hist_LMS] = lms_filter(noise, primary, bestFilterOrder_LMS, bestMu_LMS);
+
+% Plot weights evolution
+figure;
+plot(w_hist_LMS');
+grid on;
+title('LMS Weights Evolution');
+xlabel('Cycle (n)');
+ylabel('Magnitude');
+legend(arrayfun(@(i) sprintf('w_%d(n)', i - 1), 1:bestFilterOrder_LMS, 'UniformOutput', false));
+
+%% NLMS: Plot time evolution of the filter weights for the best SNR configuration
+[y_NLMS, ~, w_hist_NLMS] = nlms_filter(noise, primary, bestFilterOrder_NLMS, bestMu_NLMS);
+
+% Plot weights evolution
+figure;
+plot(w_hist_NLMS');
+grid on;
+title('NLMS Weights Evolution');
+xlabel('Cycle (n)');
+ylabel('Magnitude');
+legend(arrayfun(@(i) sprintf('w_%d(n)', i - 1), 1:bestFilterOrder_NLMS, 'UniformOutput', false));
+
+%% RLS: Plot time evolution of the filter weights for the best SNR configuration
+[y_RLS, ~, w_hist_RLS] = rls_filter(noise, primary, bestFilterOrder_RLS, bestLambda_RLS);
+
+% Plot weights evolution
+figure;
+plot(w_hist_RLS');
+grid on;
+title('RLS Weights Evolution');
+xlabel('Cycle (n)');
+ylabel('Magnitude');
+legend(arrayfun(@(i) sprintf('w_%d(n)', i - 1), 1:bestFilterOrder_RLS, 'UniformOutput', false));
